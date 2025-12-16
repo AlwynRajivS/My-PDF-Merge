@@ -2,117 +2,136 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PDF Merge • Split • Compress</title>
-
-
-<script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
-
-
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>All-in-One PDF Tool</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
-body{
-margin:0;
-font-family:Inter,system-ui;
-background:linear-gradient(135deg,#0f172a,#020617);
-color:#fff;
-}
-.container{max-width:900px;margin:auto;padding:20px}
-.card{background:rgba(255,255,255,.08);padding:18px;border-radius:14px;margin-bottom:16px}
-h1{text-align:center}
-input,button{padding:10px;border-radius:8px;border:none;font-size:15px}
-button{background:#38bdf8;font-weight:700;cursor:pointer}
-input{width:100%;margin-top:8px}
-.row{display:flex;gap:10px;flex-wrap:wrap}
-@media(max-width:600px){.row{flex-direction:column}}
+body{margin:0;font-family:Inter,system-ui;background:#f1f5f9}
+header{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;padding:16px;text-align:center}
+.container{max-width:1100px;margin:20px auto;padding:16px}
+.card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 8px 20px rgba(0,0,0,.1);margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+button{padding:10px 16px;border:none;border-radius:10px;font-weight:600;cursor:pointer;background:#2563eb;color:#fff;margin-top:10px}
+input{width:100%;padding:10px;border-radius:10px;border:1px solid #cbd5e1;margin-top:8px}
+label{font-weight:600;font-size:14px}
+small{color:#64748b}
 </style>
 </head>
 <body>
-
+<header>
+<h2>📄 All-in-One PDF Tool</h2>
+<p>Merge • Split • Delete Pages • Image ↔ PDF • Word ↔ PDF</p>
+</header>
 
 <div class="container">
-<h1>📄 PDF Tool (Working)</h1>
 
-
+<!-- MERGE PDFs -->
 <div class="card">
-<label>📂 Select PDF files</label>
-<input type="file" id="files" multiple accept="application/pdf">
+<h3>🔗 Merge PDFs</h3>
+<input type="file" id="mergeFiles" multiple accept="application/pdf">
+<button onclick="mergePDFs()">Merge</button>
 </div>
 
-
-<div class="card">
-<div class="row">
-<button onclick="mergePDF()">⬇️ Merge PDF</button>
-<button onclick="compressPDF()">📉 Compress PDF</button>
-</div>
-</div>
-
-
+<!-- SPLIT PDF -->
 <div class="card">
 <h3>✂️ Split PDF</h3>
-<input id="start" type="number" placeholder="Start page (1)">
-<input id="end" type="number" placeholder="End page (5)">
-<button onclick="splitPDF()">Split & Download</button>
-</div>
+<input type="file" id="splitFile" accept="application/pdf">
+<label>Pages (e.g. 1-3,5)</label>
+<input id="splitPages" placeholder="1-3,5">
+<button onclick="splitPDF()">Split</button>
 </div>
 
+<!-- DELETE PAGES -->
+<div class="card">
+<h3>🗑️ Delete Pages</h3>
+<input type="file" id="deleteFile" accept="application/pdf">
+<label>Pages to delete</label>
+<input id="deletePages" placeholder="2,4">
+<button onclick="deletePagesPDF()">Delete Pages</button>
+</div>
+
+<!-- IMAGE TO PDF -->
+<div class="card">
+<h3>🖼️ Image to PDF</h3>
+<input type="file" id="imgFiles" multiple accept="image/*">
+<button onclick="imageToPDF()">Convert</button>
+</div>
+
+<!-- TEXT / WORD TO PDF -->
+<div class="card">
+<h3>📝 Text / Word to PDF</h3>
+<input type="file" id="wordFile" accept=".txt,.doc,.docx">
+<button onclick="textToPDF()">Convert</button>
+<small>(Word files require copy-paste if browser blocks content)</small>
+</div>
+
+</div>
 
 <script>
-async function mergePDF(){
-const files=document.getElementById('files').files;
-if(!files.length) return alert('Select PDFs');
-
-
-const out=await PDFLib.PDFDocument.create();
-
-
-for(const f of files){
-const src=await PDFLib.PDFDocument.load(await f.arrayBuffer());
-const pages=await out.copyPages(src,src.getPageIndices());
-pages.forEach(p=>out.addPage(p));
-}
-
-
-download(await out.save(),'Merged.pdf');
-}
-
-
-async function compressPDF(){
-const files=document.getElementById('files').files;
-if(files.length!==1) return alert('Select ONE PDF for compression');
-
-
-const pdf=await PDFLib.PDFDocument.load(await files[0].arrayBuffer());
-const bytes=await pdf.save({useObjectStreams:true});
-download(bytes,'Compressed.pdf');
-}
-
-
-async function splitPDF(){
-const file=document.getElementById('files').files[0];
-if(!file) return alert('Select ONE PDF');
-
-
-const s=+document.getElementById('start').value-1;
-const e=+document.getElementById('end').value-1;
-
-
-const src=await PDFLib.PDFDocument.load(await file.arrayBuffer());
-const out=await PDFLib.PDFDocument.create();
-
-
-const pages=await out.copyPages(src,[...Array(e-s+1).keys()].map(i=>i+s));
-pages.forEach(p=>out.addPage(p));
-
-
-download(await out.save(),'Split.pdf');
-}
-
+const { PDFDocument } = PDFLib;
+const { jsPDF } = window.jspdf;
 
 function download(bytes,name){
-const a=document.createElement('a');
-a.href=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
-a.download=name;
-a.click();
+ const blob=new Blob([bytes],{type:'application/pdf'});
+ const a=document.createElement('a');
+ a.href=URL.createObjectURL(blob);
+ a.download=name;
+ a.click();
+}
+
+async function mergePDFs(){
+ const files=mergeFiles.files;
+ const merged=await PDFDocument.create();
+ for(const f of files){
+  const pdf=await PDFDocument.load(await f.arrayBuffer());
+  const pages=await merged.copyPages(pdf,pdf.getPageIndices());
+  pages.forEach(p=>merged.addPage(p));
+ }
+ download(await merged.save(),'merged.pdf');
+}
+
+async function splitPDF(){
+ const file=splitFile.files[0];
+ const pages=splitPages.value;
+ const pdf=await PDFDocument.load(await file.arrayBuffer());
+ const out=await PDFDocument.create();
+ pages.split(',').forEach(p=>{
+  if(p.includes('-')){
+    let[a,b]=p.split('-').map(x=>+x-1);
+    for(let i=a;i<=b;i++) out.addPage(pdf.getPage(i));
+  }else out.addPage(pdf.getPage(+p-1));
+ });
+ download(await out.save(),'split.pdf');
+}
+
+async function deletePagesPDF(){
+ const file=deleteFile.files[0];
+ const del=deletePages.value.split(',').map(p=>+p-1);
+ const pdf=await PDFDocument.load(await file.arrayBuffer());
+ const out=await PDFDocument.create();
+ pdf.getPages().forEach((p,i)=>{ if(!del.includes(i)) out.addPage(p); });
+ download(await out.save(),'deleted.pdf');
+}
+
+async function imageToPDF(){
+ const pdf=await PDFDocument.create();
+ for(const f of imgFiles.files){
+  const bytes=await f.arrayBuffer();
+  const img=f.type.includes('png')?await pdf.embedPng(bytes):await pdf.embedJpg(bytes);
+  const page=pdf.addPage([img.width,img.height]);
+  page.drawImage(img,{x:0,y:0,width:img.width,height:img.height});
+ }
+ download(await pdf.save(),'images.pdf');
+}
+
+async function textToPDF(){
+ const file=wordFile.files[0];
+ const text=await file.text();
+ const doc=new jsPDF();
+ doc.text(text,10,10);
+ doc.save('text.pdf');
 }
 </script>
 </body>
