@@ -2,108 +2,118 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ultimate PDF Tool</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF Merge • Split • Compress</title>
+
 
 <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+
 
 <style>
-:root{--bg:#020617;--card:#0f172a;--accent:#22c55e;--btn:#38bdf8}
-body{margin:0;font-family:Inter,system-ui;background:linear-gradient(135deg,#020617,#020617,#0f172a);color:#fff}
-.container{max-width:1300px;margin:auto;padding:18px}
-h1{text-align:center;margin-bottom:12px}
-.card{background:rgba(255,255,255,.06);border-radius:14px;padding:16px;margin-bottom:16px}
-label,.btn{background:var(--accent);color:#000;padding:10px 16px;border-radius:10px;font-weight:700;cursor:pointer;display:inline-block;margin:4px}
-.btn{background:var(--btn)}
-input{display:none}
-.pages{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px}
-.page{background:#fff;color:#000;border-radius:10px;padding:6px;position:relative}
-.page canvas{width:100%}
-.ctrl{position:absolute;top:4px;right:4px;display:flex;gap:4px}
-.ctrl button{border:none;border-radius:6px;cursor:pointer;padding:2px 6px;font-weight:700}
-.del{background:#ef4444;color:#fff}
-.rot{background:#facc15}
-.lang{float:right}
-@media(max-width:600px){.pages{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}}
+body{
+margin:0;
+font-family:Inter,system-ui;
+background:linear-gradient(135deg,#0f172a,#020617);
+color:#fff;
+}
+.container{max-width:900px;margin:auto;padding:20px}
+.card{background:rgba(255,255,255,.08);padding:18px;border-radius:14px;margin-bottom:16px}
+h1{text-align:center}
+input,button{padding:10px;border-radius:8px;border:none;font-size:15px}
+button{background:#38bdf8;font-weight:700;cursor:pointer}
+input{width:100%;margin-top:8px}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+@media(max-width:600px){.row{flex-direction:column}}
 </style>
 </head>
 <body>
 
+
 <div class="container">
-<h1>📄 Ultimate PDF Tool</h1>
+<h1>📄 PDF Tool (Working)</h1>
+
 
 <div class="card">
-<label for="pdfInput">➕ Upload PDFs</label>
-<label for="imgInput">🖼️ Image ➜ PDF</label>
-<input id="pdfInput" type="file" multiple accept="application/pdf">
-<input id="imgInput" type="file" multiple accept="image/*">
+<label>📂 Select PDF files</label>
+<input type="file" id="files" multiple accept="application/pdf">
 </div>
 
-<div id="pages" class="pages"></div>
 
 <div class="card">
-<button class="btn" onclick="downloadMerged()">⬇️ Download PDF</button>
-<button class="btn" onclick="compressPDF()">📉 Compress</button>
-<button class="btn" onclick="splitPDF()">✂️ Split</button>
-<button class="btn" onclick="protectPDF()">🔐 Protect</button>
-<button class="btn" onclick="unlockPDF()">🔓 Unlock</button>
-<button class="btn" onclick="exportImages()">🖼️ PDF ➜ Image</button>
+<div class="row">
+<button onclick="mergePDF()">⬇️ Merge PDF</button>
+<button onclick="compressPDF()">📉 Compress PDF</button>
+</div>
 </div>
 
+
 <div class="card">
-Start <input id="s" type="number" style="width:70px"> End <input id="e" type="number" style="width:70px">
-Password <input id="pwd" type="text" style="width:120px">
+<h3>✂️ Split PDF</h3>
+<input id="start" type="number" placeholder="Start page (1)">
+<input id="end" type="number" placeholder="End page (5)">
+<button onclick="splitPDF()">Split & Download</button>
 </div>
 </div>
+
 
 <script>
-pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-const pagesDiv=document.getElementById('pages');new Sortable(pagesDiv,{animation:150});
+async function mergePDF(){
+const files=document.getElementById('files').files;
+if(!files.length) return alert('Select PDFs');
 
-async function addPDF(bytes){
- const pdf=await pdfjsLib.getDocument({data:bytes}).promise;
- for(let i=1;i<=pdf.numPages;i++){
-  const p=await pdf.getPage(i);const v=p.getViewport({scale:1});
-  const c=document.createElement('canvas');c.width=v.width;c.height=v.height;
-  await p.render({canvasContext:c.getContext('2d'),viewport:v}).promise;
-  const w=document.createElement('div');w.className='page';w.dataset.bytes=bytes;w.dataset.i=i-1;w.dataset.r=0;
-  w.innerHTML=`<div class='ctrl'><button class='rot'>⟳</button><button class='del'>×</button></div>`;
-  w.querySelector('.del').onclick=()=>w.remove();
-  w.querySelector('.rot').onclick=()=>{w.dataset.r=(+w.dataset.r+90)%360;w.style.transform=`rotate(${w.dataset.r}deg)`};
-  w.appendChild(c);pagesDiv.appendChild(w);
- }
+
+const out=await PDFLib.PDFDocument.create();
+
+
+for(const f of files){
+const src=await PDFLib.PDFDocument.load(await f.arrayBuffer());
+const pages=await out.copyPages(src,src.getPageIndices());
+pages.forEach(p=>out.addPage(p));
 }
 
-pdfInput.onchange=e=>[...e.target.files].forEach(f=>f.arrayBuffer().then(addPDF));
-imgInput.onchange=async e=>{
- const doc=await PDFLib.PDFDocument.create();
- for(const f of e.target.files){const img=await doc.embedJpg(await f.arrayBuffer());doc.addPage([img.width,img.height]).drawImage(img,{x:0,y:0,width:img.width,height:img.height})}
- addPDF(await doc.save());
+
+download(await out.save(),'Merged.pdf');
 }
 
-async function build(){
- const doc=await PDFLib.PDFDocument.create();
- for(const p of document.querySelectorAll('.page')){
-  const src=await PDFLib.PDFDocument.load(p.dataset.bytes);
-  const [cp]=await doc.copyPages(src,[+p.dataset.i]);
-  if(+p.dataset.r)cp.setRotation(PDFLib.degrees(+p.dataset.r));
-  doc.addPage(cp);
- }
- return doc;
+
+async function compressPDF(){
+const files=document.getElementById('files').files;
+if(files.length!==1) return alert('Select ONE PDF for compression');
+
+
+const pdf=await PDFLib.PDFDocument.load(await files[0].arrayBuffer());
+const bytes=await pdf.save({useObjectStreams:true});
+download(bytes,'Compressed.pdf');
 }
 
-async function downloadMerged(){save(await build(),'Final.pdf')}
-async function compressPDF(){const d=await build();saveBytes(await d.save({useObjectStreams:true}),'Compressed.pdf')}
-async function splitPDF(){const s=+document.getElementById('s').value-1,e=+document.getElementById('e').value-1;const b=await build();const o=await PDFLib.PDFDocument.create();(await o.copyPages(b,[...Array(e-s+1).keys()].map(i=>i+s))).forEach(p=>o.addPage(p));save(o,'Split.pdf')}
-async function protectPDF(){const d=await build();saveBytes(await d.save({userPassword:pwd.value}),'Protected.pdf')}
-async function unlockPDF(){alert('Re-upload unlocked PDF to edit')}
-async function exportImages(){alert('PDF ➜ Image uses browser download per page')}
 
-function save(pdf,name){pdf.save().then(b=>saveBytes(b,name))}
-function saveBytes(b,n){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([b],{type:'application/pdf'}));a.download=n;a.click()}
+async function splitPDF(){
+const file=document.getElementById('files').files[0];
+if(!file) return alert('Select ONE PDF');
+
+
+const s=+document.getElementById('start').value-1;
+const e=+document.getElementById('end').value-1;
+
+
+const src=await PDFLib.PDFDocument.load(await file.arrayBuffer());
+const out=await PDFLib.PDFDocument.create();
+
+
+const pages=await out.copyPages(src,[...Array(e-s+1).keys()].map(i=>i+s));
+pages.forEach(p=>out.addPage(p));
+
+
+download(await out.save(),'Split.pdf');
+}
+
+
+function download(bytes,name){
+const a=document.createElement('a');
+a.href=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
+a.download=name;
+a.click();
+}
 </script>
 </body>
 </html>
-
