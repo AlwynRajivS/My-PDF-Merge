@@ -2,12 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>All-in-One PDF Tool – Preview, Zoom & Merge</title>
+<title>All-in-One PDF Tool – FIXED Multi Upload</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 
-<!-- Libraries -->
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
@@ -43,13 +42,11 @@ small{color:#475569}
 
 <div class="controls">
   <input type="file" id="pdfInput" multiple accept="application/pdf">
-  <button onclick="loadPDFs()">Load PDFs</button>
-
+  <button onclick="addPDFs()">➕ Add PDFs</button>
   <label>🔍 Zoom</label>
-  <input type="range" id="zoomRange" min="0.2" max="1.2" step="0.1" value="0.4" oninput="updateZoom(this.value)">
-
-  <button class="secondary" onclick="mergeAll()">🔗 Merge All</button>
-  <button onclick="splitSelected()">✂️ Split Selected</button>
+  <input type="range" id="zoomRange" min="0.2" max="1.2" step="0.1" value="0.4" oninput="setZoom(this.value)">
+  <button class="secondary" onclick="mergeAll()">🔗 Merge</button>
+  <button onclick="splitSelected()">✂️ Split</button>
 </div>
 
 <div class="pages" id="pages"></div>
@@ -61,137 +58,134 @@ small{color:#475569}
 const { PDFDocument } = PDFLib;
 let pdfDocs = [];
 let pdfFiles = [];
-let zoomLevel = 0.4;
+let zoom = 0.4;
+let sortable;
 
-async function loadPDFs(){
+async function addPDFs(){
   const files = pdfInput.files;
-  if(!files.length){alert('Select multiple PDFs');return;}
+  if(!files.length) return alert('Select PDF files');
 
-  pages.innerHTML = '';
-  pdfDocs = [];
-  pdfFiles = [];
+  for(const file of files){
+    const bytes = await file.arrayBuffer();
+    const pdfIndex = pdfDocs.length;   // IMPORTANT: append index
 
-  for(let fIndex=0; fIndex<files.length; fIndex++){
-    const bytes = await files[fIndex].arrayBuffer();
     pdfDocs.push(await PDFDocument.load(bytes));
     pdfFiles.push(bytes);
 
     const pdfjs = await pdfjsLib.getDocument({data:bytes}).promise;
 
-    for(let p=1; p<=pdfjs.numPages; p++){
-      await renderPage(pdfjs, fIndex, p);
+    for(let p=1;p<=pdfjs.numPages;p++){
+      const page = await pdfjs.getPage(p);
+      const viewport = page.getViewport({scale:zoom});
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+
+      await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
+
+      const div = document.createElement('div');
+      div.className='page';
+      div.dataset.pdf=pdfIndex;
+      div.dataset.page=p-1;
+
+      div.innerHTML=`
+        <canvas></canvas>
+        <div class="actions">
+          <input type="checkbox">
+          <button class="danger" onclick="this.closest('.page').remove()">✖</button>
+        </div>
+        <small>PDF ${pdfIndex+1} • Page ${p}</small>`;
+
+      div.querySelector('canvas').replaceWith(canvas);
+      pages.appendChild(div);
     }
   }
 
-  new Sortable(pages,{animation:150});
+  if(sortable) sortable.destroy();
+  sortable = new Sortable(pages,{animation:150});
+
+  pdfInput.value=''; // reset input so next upload APPENDS
 }
 
-async function renderPage(pdfjs, fIndex, p){
-  const page = await pdfjs.getPage(p);
-  const viewport = page.getViewport({scale:zoomLevel});
-  const canvas = document.createElement('canvas');
-  canvas.width = viewport.width;
-  canvas.height = viewport.height;
-
-  await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
-
-  const div = document.createElement('div');
-  div.className = 'page';
-  div.dataset.pdf = fIndex;
-  div.dataset.page = p-1;
-
-  div.innerHTML = `
-    <canvas></canvas>
-    <div class="actions">
-      <input type="checkbox">
-      <button class="danger" onclick="this.closest('.page').remove()">✖</button>
-    </div>
-    <small>PDF ${fIndex+1} • Page ${p}</small>
-  `;
-
-  div.querySelector('canvas').replaceWith(canvas);
-  pages.appendChild(div);
+function setZoom(z){
+  zoom=parseFloat(z);
+  rerenderAll();
 }
 
-function updateZoom(z){
-  zoomLevel = parseFloat(z);
-  reloadPreview();
-}
-
-async function reloadPreview(){
-  const existing = [...document.querySelectorAll('.page')]
-    .map(d=>({pdf:d.dataset.pdf,page:d.dataset.page,checked:d.querySelector('input').checked}))
+async function rerenderAll(){
+  const meta=[...document.querySelectorAll('.page')].map(p=>({
+    pdf:p.dataset.pdf,
+    page:p.dataset.page,
+    checked:p.querySelector('input').checked
+  }));
 
   pages.innerHTML='';
 
-  for(const e of existing){
-    const pdfjs = await pdfjsLib.getDocument({data:pdfFiles[e.pdf]}).promise;
-    const page = await pdfjs.getPage(parseInt(e.page)+1);
-    const viewport = page.getViewport({scale:zoomLevel});
+  for(const m of meta){
+    const pdfjs = await pdfjsLib.getDocument({data:pdfFiles[m.pdf]}).promise;
+    const page = await pdfjs.getPage(parseInt(m.page)+1);
+    const viewport = page.getViewport({scale:zoom});
     const canvas = document.createElement('canvas');
     canvas.width = viewport.width;
     canvas.height = viewport.height;
 
     await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
 
-    const div = document.createElement('div');
+    const div=document.createElement('div');
     div.className='page';
-    div.dataset.pdf=e.pdf;
-    div.dataset.page=e.page;
+    div.dataset.pdf=m.pdf;
+    div.dataset.page=m.page;
 
     div.innerHTML=`
       <canvas></canvas>
       <div class="actions">
-        <input type="checkbox" ${e.checked?'checked':''}>
+        <input type="checkbox" ${m.checked?'checked':''}>
         <button class="danger" onclick="this.closest('.page').remove()">✖</button>
       </div>
-      <small>PDF ${parseInt(e.pdf)+1} • Page ${parseInt(e.page)+1}</small>`;
+      <small>PDF ${parseInt(m.pdf)+1} • Page ${parseInt(m.page)+1}</small>`;
 
     div.querySelector('canvas').replaceWith(canvas);
     pages.appendChild(div);
   }
 
-  new Sortable(pages,{animation:150});
+  sortable = new Sortable(pages,{animation:150});
 }
 
 async function mergeAll(){
-  if(!pages.children.length){alert('No pages');return;}
+  if(!pages.children.length) return alert('No pages to merge');
 
   const out = await PDFDocument.create();
 
   for(const div of pages.children){
-    const srcPdf = pdfDocs[div.dataset.pdf];
-    const pageIndex = parseInt(div.dataset.page);
-    const [copied] = await out.copyPages(srcPdf,[pageIndex]);
-    out.addPage(copied);
+    const src = pdfDocs[div.dataset.pdf];
+    const idx = parseInt(div.dataset.page);
+    const [cp] = await out.copyPages(src,[idx]);
+    out.addPage(cp);
   }
 
   download(await out.save(),'merged.pdf');
 }
 
 async function splitSelected(){
-  const selected = [...document.querySelectorAll('.page')]
-    .filter(p=>p.querySelector('input').checked);
-
-  if(!selected.length){alert('Select pages to split');return;}
+  const sel=[...document.querySelectorAll('.page')].filter(p=>p.querySelector('input').checked);
+  if(!sel.length) return alert('Select pages first');
 
   const out = await PDFDocument.create();
-
-  for(const div of selected){
-    const srcPdf = pdfDocs[div.dataset.pdf];
-    const pageIndex = parseInt(div.dataset.page);
-    const [copied] = await out.copyPages(srcPdf,[pageIndex]);
-    out.addPage(copied);
+  for(const div of sel){
+    const src = pdfDocs[div.dataset.pdf];
+    const idx = parseInt(div.dataset.page);
+    const [cp] = await out.copyPages(src,[idx]);
+    out.addPage(cp);
   }
 
   download(await out.save(),'split.pdf');
 }
 
 function download(bytes,name){
-  const blob = new Blob([bytes],{type:'application/pdf'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
+  const blob=new Blob([bytes],{type:'application/pdf'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=name;
   a.click();
 }
 </script>
