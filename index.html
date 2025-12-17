@@ -34,10 +34,49 @@ small{color:#475569}
 @media(max-width:600px){.pages{grid-template-columns:repeat(2,1fr)}}
 
 /* FULL SCREEN MODAL */
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.9);display:none;justify-content:center;align-items:center;z-index:9999}
-.modal-content{background:#111;padding:10px;border-radius:12px;max-width:95vw;max-height:95vh;overflow:auto}
-.modal canvas{display:block;margin:auto}
-.modal-controls{display:flex;justify-content:space-between;margin-bottom:8px}
+/* FULL SCREEN MODAL – ATTRACTIVE ZOOM VIEW */
+.modal{
+  position:fixed;
+  inset:0;
+  background:linear-gradient(180deg,#000000e6,#000000f2);
+  display:none;
+  justify-content:center;
+  align-items:center;
+  z-index:9999;
+}
+
+.modal-content{
+  background:#0f172a;
+  padding:14px;
+  border-radius:18px;
+  max-width:96vw;
+  max-height:96vh;
+  overflow:auto;
+  box-shadow:0 30px 80px rgba(0,0,0,.6);
+}
+
+.modal canvas{
+  display:block;
+  margin:auto;
+  border-radius:10px;
+}
+
+.modal-controls{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  justify-content:space-between;
+  margin-bottom:10px;
+}
+
+.zoom-info{
+  flex:1;
+  text-align:center;
+  color:#e5e7eb;
+  font-weight:600;
+  font-size:14px;
+}
+
 </style>
 </head>
 
@@ -67,11 +106,12 @@ small{color:#475569}
 <div class="modal" id="previewModal">
   <div class="modal-content" id="modalBox">
     <div class="modal-controls">
-      <!-- 🔴 PERSONAL RED ZOOM BUTTONS -->
-      <button class="zoomBtn" onclick="zoomModal(0.1)">➕</button>
-      <button class="zoomBtn" onclick="zoomModal(-0.1)">➖</button>
-      <button class="danger" onclick="closeModal()">✖ Close</button>
-    </div>
+  <button class="zoomBtn" onclick="zoomModal(0.1)">➕</button>
+  <div class="zoom-info" id="zoomInfo">Zoom: 100%</div>
+  <button class="zoomBtn" onclick="zoomModal(-0.1)">➖</button>
+  <button class="danger" onclick="closeModal()">✖</button>
+</div>
+
     <canvas id="modalCanvas"></canvas>
   </div>
 </div>
@@ -159,16 +199,22 @@ async function renderModal(){
 // BUTTON ZOOM
 function zoomModal(delta){
   modalScale=Math.min(5,Math.max(0.3,modalScale+delta));
+  document.getElementById('zoomInfo').innerText =
+    `Zoom: ${Math.round(modalScale*100)}%`;
   renderModal();
 }
+
 
 // MOUSE WHEEL ZOOM
 modalBox.addEventListener('wheel',e=>{
   e.preventDefault();
   modalScale += (e.deltaY < 0 ? 0.1 : -0.1);
   modalScale=Math.min(5,Math.max(0.3,modalScale));
+  document.getElementById('zoomInfo').innerText =
+    `Zoom: ${Math.round(modalScale*100)}%`;
   renderModal();
 },{passive:false});
+
 
 // CLOSE MODAL
 function closeModal(){
