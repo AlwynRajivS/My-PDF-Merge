@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>All-in-One PDF Tool (Merge + Preview)</title>
+<title>All-in-One PDF Tool – Preview, Zoom & Merge</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -17,10 +17,12 @@ body{margin:0;font-family:Inter,system-ui;background:#f1f5f9}
 header{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;padding:16px;text-align:center}
 .container{max-width:1200px;margin:20px auto;padding:16px}
 .card{background:#fff;border-radius:16px;padding:16px;box-shadow:0 10px 25px rgba(0,0,0,.1)}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 input[type=file]{padding:10px}
 button{padding:10px 16px;border:none;border-radius:10px;font-weight:600;background:#2563eb;color:white;cursor:pointer}
 button.danger{background:#dc2626}
 button.secondary{background:#16a34a}
+label{font-weight:600;font-size:14px}
 .pages{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin-top:20px}
 .page{background:#f8fafc;border-radius:12px;padding:8px;cursor:grab}
 .page canvas{width:100%;border-radius:8px}
@@ -33,22 +35,24 @@ small{color:#475569}
 <body>
 <header>
 <h2>📄 All-in-One PDF Tool</h2>
-<p>Multi-PDF Merge • Preview • Drag & Drop • Delete • Split • Reorder</p>
+<p>Multi-PDF Merge • Preview • Zoom • Drag & Drop • Delete • Split • Reorder</p>
 </header>
 
 <div class="container">
 <div class="card">
 
-<!-- MULTI PDF UPLOAD -->
-<input type="file" id="pdfInput" multiple accept="application/pdf">
-<button onclick="loadPDFs()">Load PDFs</button>
+<div class="controls">
+  <input type="file" id="pdfInput" multiple accept="application/pdf">
+  <button onclick="loadPDFs()">Load PDFs</button>
 
-<!-- PAGE PREVIEW AREA -->
+  <label>🔍 Zoom</label>
+  <input type="range" id="zoomRange" min="0.2" max="1.2" step="0.1" value="0.4" oninput="updateZoom(this.value)">
+
+  <button class="secondary" onclick="mergeAll()">🔗 Merge All</button>
+  <button onclick="splitSelected()">✂️ Split Selected</button>
+</div>
+
 <div class="pages" id="pages"></div>
-
-<br>
-<button class="secondary" onclick="mergeAll()">🔗 Merge All Pages</button>
-<button onclick="splitSelected()">✂️ Split Selected Pages</button>
 
 </div>
 </div>
@@ -56,6 +60,8 @@ small{color:#475569}
 <script>
 const { PDFDocument } = PDFLib;
 let pdfDocs = [];
+let pdfFiles = [];
+let zoomLevel = 0.4;
 
 async function loadPDFs(){
   const files = pdfInput.files;
@@ -63,39 +69,86 @@ async function loadPDFs(){
 
   pages.innerHTML = '';
   pdfDocs = [];
+  pdfFiles = [];
 
   for(let fIndex=0; fIndex<files.length; fIndex++){
     const bytes = await files[fIndex].arrayBuffer();
     pdfDocs.push(await PDFDocument.load(bytes));
+    pdfFiles.push(bytes);
 
     const pdfjs = await pdfjsLib.getDocument({data:bytes}).promise;
 
     for(let p=1; p<=pdfjs.numPages; p++){
-      const page = await pdfjs.getPage(p);
-      const viewport = page.getViewport({scale:0.4});
-      const canvas = document.createElement('canvas');
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-
-      await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
-
-      const div = document.createElement('div');
-      div.className = 'page';
-      div.dataset.pdf = fIndex;
-      div.dataset.page = p-1;
-
-      div.innerHTML = `
-        <canvas></canvas>
-        <div class="actions">
-          <input type="checkbox">
-          <button class="danger" onclick="this.closest('.page').remove()">✖</button>
-        </div>
-        <small>PDF ${fIndex+1} • Page ${p}</small>
-      `;
-
-      div.querySelector('canvas').replaceWith(canvas);
-      pages.appendChild(div);
+      await renderPage(pdfjs, fIndex, p);
     }
+  }
+
+  new Sortable(pages,{animation:150});
+}
+
+async function renderPage(pdfjs, fIndex, p){
+  const page = await pdfjs.getPage(p);
+  const viewport = page.getViewport({scale:zoomLevel});
+  const canvas = document.createElement('canvas');
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+
+  await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
+
+  const div = document.createElement('div');
+  div.className = 'page';
+  div.dataset.pdf = fIndex;
+  div.dataset.page = p-1;
+
+  div.innerHTML = `
+    <canvas></canvas>
+    <div class="actions">
+      <input type="checkbox">
+      <button class="danger" onclick="this.closest('.page').remove()">✖</button>
+    </div>
+    <small>PDF ${fIndex+1} • Page ${p}</small>
+  `;
+
+  div.querySelector('canvas').replaceWith(canvas);
+  pages.appendChild(div);
+}
+
+function updateZoom(z){
+  zoomLevel = parseFloat(z);
+  reloadPreview();
+}
+
+async function reloadPreview(){
+  const existing = [...document.querySelectorAll('.page')]
+    .map(d=>({pdf:d.dataset.pdf,page:d.dataset.page,checked:d.querySelector('input').checked}))
+
+  pages.innerHTML='';
+
+  for(const e of existing){
+    const pdfjs = await pdfjsLib.getDocument({data:pdfFiles[e.pdf]}).promise;
+    const page = await pdfjs.getPage(parseInt(e.page)+1);
+    const viewport = page.getViewport({scale:zoomLevel});
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+
+    await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
+
+    const div = document.createElement('div');
+    div.className='page';
+    div.dataset.pdf=e.pdf;
+    div.dataset.page=e.page;
+
+    div.innerHTML=`
+      <canvas></canvas>
+      <div class="actions">
+        <input type="checkbox" ${e.checked?'checked':''}>
+        <button class="danger" onclick="this.closest('.page').remove()">✖</button>
+      </div>
+      <small>PDF ${parseInt(e.pdf)+1} • Page ${parseInt(e.page)+1}</small>`;
+
+    div.querySelector('canvas').replaceWith(canvas);
+    pages.appendChild(div);
   }
 
   new Sortable(pages,{animation:150});
