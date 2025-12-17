@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>All-in-One PDF Tool (Full-Screen Preview)</title>
+<title>All-in-One PDF Tool (Mouse Wheel Zoom)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -33,7 +33,7 @@ small{color:#475569}
 /* FULL SCREEN MODAL */
 .modal{
   position:fixed; inset:0;
-  background:rgba(0,0,0,.85);
+  background:rgba(0,0,0,.9);
   display:none;
   justify-content:center;
   align-items:center;
@@ -41,14 +41,19 @@ small{color:#475569}
 }
 .modal-content{
   background:#111;
-  padding:12px;
+  padding:10px;
   border-radius:12px;
-  max-width:90vw;
-  max-height:90vh;
+  max-width:95vw;
+  max-height:95vh;
+  overflow:auto;
 }
-.modal canvas{max-width:100%;max-height:80vh}
+.modal canvas{
+  display:block;
+  margin:auto;
+}
 .modal-controls{
-  display:flex;justify-content:space-between;
+  display:flex;
+  justify-content:space-between;
   margin-bottom:8px;
 }
 </style>
@@ -57,7 +62,7 @@ small{color:#475569}
 <body>
 <header>
 <h2>📄 All-in-One PDF Tool</h2>
-<p>Add One-by-One • Preview • Zoom • Full-Screen • Reorder • Merge</p>
+<p>Add • Preview • Reorder • Full Screen • Mouse Scroll Zoom</p>
 </header>
 
 <div class="container">
@@ -66,10 +71,6 @@ small{color:#475569}
 <div class="controls">
   <input type="file" id="pdfInput" accept="application/pdf">
   <button onclick="addPDF()">➕ Add PDF</button>
-
-  <label>🔍 Zoom</label>
-  <input type="range" min="0.3" max="1.5" step="0.1" value="0.5"
-         oninput="setZoom(this.value)">
 
   <button class="secondary" onclick="mergeAll()">🔗 Merge</button>
   <button onclick="splitSelected()">✂️ Split</button>
@@ -80,9 +81,9 @@ small{color:#475569}
 </div>
 </div>
 
-<!-- FULL SCREEN PREVIEW MODAL -->
+<!-- FULL SCREEN PREVIEW -->
 <div class="modal" id="previewModal">
-  <div class="modal-content">
+  <div class="modal-content" id="modalBox">
     <div class="modal-controls">
       <button onclick="zoomModal(0.1)">➕</button>
       <button onclick="zoomModal(-0.1)">➖</button>
@@ -96,14 +97,15 @@ small{color:#475569}
 const { PDFDocument } = PDFLib;
 
 let pdfDocs=[], pdfJsDocs=[];
-let zoom=0.5, sortable;
+let zoomThumb=0.5;
 let modalScale=1;
-let modalPageRef=null;
+let modalPage=null;
+let sortable;
 
 // ADD PDF ONE BY ONE
 async function addPDF(){
   const file=pdfInput.files[0];
-  if(!file) return alert("Select PDF");
+  if(!file) return alert("Select a PDF");
 
   const bytes=await file.arrayBuffer();
   const idx=pdfDocs.length;
@@ -119,7 +121,7 @@ async function addPDF(){
   pdfInput.value='';
 }
 
-// CREATE PAGE
+// CREATE THUMBNAIL PAGE
 async function createPage(pdfIndex,pageIndex){
   const div=document.createElement('div');
   div.className='page';
@@ -140,49 +142,54 @@ async function createPage(pdfIndex,pageIndex){
   };
 
   pages.appendChild(div);
-  renderCanvas(div);
+  renderThumb(div);
 }
 
-// RENDER THUMBNAIL
-async function renderCanvas(div){
+// RENDER THUMB
+async function renderThumb(div){
   const pdf=pdfJsDocs[div.dataset.pdf];
   const page=await pdf.getPage(+div.dataset.page+1);
-  const vp=page.getViewport({scale:zoom});
+  const vp=page.getViewport({scale:zoomThumb});
   const c=div.querySelector('canvas');
   c.width=vp.width; c.height=vp.height;
   await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
 }
 
-// GLOBAL ZOOM
-function setZoom(z){
-  zoom=parseFloat(z);
-  document.querySelectorAll('.page').forEach(renderCanvas);
-}
-
 // FULL SCREEN PREVIEW
 async function openModal(div){
-  modalPageRef=div;
+  modalPage=div;
   modalScale=1;
-  document.getElementById('previewModal').style.display='flex';
+  previewModal.style.display='flex';
   renderModal();
 }
 
+// RENDER MODAL PAGE
 async function renderModal(){
-  const pdf=pdfJsDocs[modalPageRef.dataset.pdf];
-  const page=await pdf.getPage(+modalPageRef.dataset.page+1);
+  const pdf=pdfJsDocs[modalPage.dataset.pdf];
+  const page=await pdf.getPage(+modalPage.dataset.page+1);
   const vp=page.getViewport({scale:modalScale});
-  const c=document.getElementById('modalCanvas');
+  const c=modalCanvas;
   c.width=vp.width; c.height=vp.height;
   await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
 }
 
+// BUTTON ZOOM
 function zoomModal(delta){
-  modalScale=Math.max(0.5,modalScale+delta);
+  modalScale=Math.min(5,Math.max(0.3,modalScale+delta));
   renderModal();
 }
 
+// MOUSE WHEEL ZOOM (IMPORTANT)
+modalBox.addEventListener('wheel',e=>{
+  e.preventDefault();
+  modalScale += (e.deltaY < 0 ? 0.1 : -0.1);
+  modalScale=Math.min(5,Math.max(0.3,modalScale));
+  renderModal();
+},{passive:false});
+
+// CLOSE MODAL
 function closeModal(){
-  document.getElementById('previewModal').style.display='none';
+  previewModal.style.display='none';
 }
 
 // MERGE
@@ -214,7 +221,7 @@ function download(bytes,name){
   a.download=name; a.click();
 }
 
-// ESC TO CLOSE MODAL
+// ESC TO CLOSE
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape') closeModal();
 });
