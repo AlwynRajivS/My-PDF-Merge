@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>All‑in‑One PDF Tool – FIXED Multi Upload</title>
+<title>All-in-One PDF Tool (Stable Zoom)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -21,7 +21,6 @@ input[type=file]{padding:10px}
 button{padding:10px 16px;border:none;border-radius:10px;font-weight:600;background:#2563eb;color:white;cursor:pointer}
 button.danger{background:#dc2626}
 button.secondary{background:#16a34a}
-label{font-weight:600;font-size:14px}
 .pages{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin-top:20px}
 .page{background:#f8fafc;border-radius:12px;padding:8px;cursor:grab}
 .page canvas{width:100%;border-radius:8px}
@@ -33,18 +32,21 @@ small{color:#475569}
 
 <body>
 <header>
-<h2>📄 All‑in‑One PDF Tool</h2>
-<p>Multi‑PDF Merge • Preview • Zoom • Drag & Drop • Delete • Split • Reorder</p>
+<h2>📄 All-in-One PDF Tool</h2>
+<p>Add One-by-One • Preview • Zoom • Reorder • Delete • Split • Merge</p>
 </header>
 
 <div class="container">
 <div class="card">
 
 <div class="controls">
-  <input type="file" id="pdfInput" multiple accept="application/pdf">
-  <button onclick="addPDFs()">➕ Add PDFs</button>
+  <input type="file" id="pdfInput" accept="application/pdf">
+  <button onclick="addPDF()">➕ Add PDF</button>
+
   <label>🔍 Zoom</label>
-  <input type="range" id="zoomRange" min="0.2" max="1.2" step="0.1" value="0.4" oninput="setZoom(this.value)">
+  <input type="range" min="0.3" max="1.5" step="0.1" value="0.5"
+         oninput="setZoom(this.value)">
+
   <button class="secondary" onclick="mergeAll()">🔗 Merge</button>
   <button onclick="splitSelected()">✂️ Split</button>
 </div>
@@ -56,103 +58,80 @@ small{color:#475569}
 
 <script>
 const { PDFDocument } = PDFLib;
-let pdfDocs = [];
-let pdfFiles = [];
-let zoom = 0.4;
+
+let pdfDocs = [];        // pdf-lib docs
+let pdfJsDocs = [];     // pdf.js docs
+let zoom = 0.5;
 let sortable;
 
-async function addPDFs(){
-  const files = pdfInput.files;
-  if(!files.length) return alert('Select PDF files');
+// Add ONE PDF at a time
+async function addPDF(){
+  const file = pdfInput.files[0];
+  if(!file) return alert("Select one PDF");
 
-  for(const file of files){
-    const bytes = await file.arrayBuffer();
-    const pdfIndex = pdfDocs.length;   // IMPORTANT: append index
+  const bytes = await file.arrayBuffer();
+  const pdfIndex = pdfDocs.length;
 
-    pdfDocs.push(await PDFDocument.load(bytes));
-    pdfFiles.push(bytes);
+  pdfDocs.push(await PDFDocument.load(bytes));
+  pdfJsDocs.push(await pdfjsLib.getDocument({data:bytes}).promise);
 
-    const pdfjs = await pdfjsLib.getDocument({data:bytes}).promise;
+  const pdf = pdfJsDocs[pdfIndex];
 
-    for(let p=1;p<=pdfjs.numPages;p++){
-      const page = await pdfjs.getPage(p);
-      const viewport = page.getViewport({scale:zoom});
-      const canvas = document.createElement('canvas');
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-
-      await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
-
-      const div = document.createElement('div');
-      div.className='page';
-      div.dataset.pdf=pdfIndex;
-      div.dataset.page=p-1;
-
-      div.innerHTML=`
-        <canvas></canvas>
-        <div class="actions">
-          <input type="checkbox">
-          <button class="danger" onclick="this.closest('.page').remove()">✖</button>
-        </div>
-        <small>PDF ${pdfIndex+1} • Page ${p}</small>`;
-
-      div.querySelector('canvas').replaceWith(canvas);
-      pages.appendChild(div);
-    }
+  for(let p=1; p<=pdf.numPages; p++){
+    createPage(pdfIndex, p-1);
   }
 
   if(sortable) sortable.destroy();
   sortable = new Sortable(pages,{animation:150});
 
-  pdfInput.value=''; // reset input so next upload APPENDS
+  pdfInput.value = ''; // allow next file
 }
 
+// Create page container once
+async function createPage(pdfIndex, pageIndex){
+  const div = document.createElement('div');
+  div.className = 'page';
+  div.dataset.pdf = pdfIndex;
+  div.dataset.page = pageIndex;
+
+  div.innerHTML = `
+    <canvas></canvas>
+    <div class="actions">
+      <input type="checkbox">
+      <button class="danger" onclick="this.closest('.page').remove()">✖</button>
+    </div>
+    <small>PDF ${pdfIndex+1} • Page ${pageIndex+1}</small>
+  `;
+
+  pages.appendChild(div);
+  await renderCanvas(div);
+}
+
+// Render canvas (used by zoom too)
+async function renderCanvas(div){
+  const pdf = pdfJsDocs[div.dataset.pdf];
+  const page = await pdf.getPage(parseInt(div.dataset.page)+1);
+  const viewport = page.getViewport({scale:zoom});
+
+  const canvas = div.querySelector('canvas');
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+
+  await page.render({
+    canvasContext: canvas.getContext('2d'),
+    viewport
+  }).promise;
+}
+
+// Zoom handler (NO DOM rebuild)
 function setZoom(z){
-  zoom=parseFloat(z);
-  rerenderAll();
+  zoom = parseFloat(z);
+  document.querySelectorAll('.page').forEach(renderCanvas);
 }
 
-async function rerenderAll(){
-  const meta=[...document.querySelectorAll('.page')].map(p=>({
-    pdf:p.dataset.pdf,
-    page:p.dataset.page,
-    checked:p.querySelector('input').checked
-  }));
-
-  pages.innerHTML='';
-
-  for(const m of meta){
-    const pdfjs = await pdfjsLib.getDocument({data:pdfFiles[m.pdf]}).promise;
-    const page = await pdfjs.getPage(parseInt(m.page)+1);
-    const viewport = page.getViewport({scale:zoom});
-    const canvas = document.createElement('canvas');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-
-    await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
-
-    const div=document.createElement('div');
-    div.className='page';
-    div.dataset.pdf=m.pdf;
-    div.dataset.page=m.page;
-
-    div.innerHTML=`
-      <canvas></canvas>
-      <div class="actions">
-        <input type="checkbox" ${m.checked?'checked':''}>
-        <button class="danger" onclick="this.closest('.page').remove()">✖</button>
-      </div>
-      <small>PDF ${parseInt(m.pdf)+1} • Page ${parseInt(m.page)+1}</small>`;
-
-    div.querySelector('canvas').replaceWith(canvas);
-    pages.appendChild(div);
-  }
-
-  sortable = new Sortable(pages,{animation:150});
-}
-
+// Merge all pages
 async function mergeAll(){
-  if(!pages.children.length) return alert('No pages to merge');
+  if(!pages.children.length) return alert("No pages");
 
   const out = await PDFDocument.create();
 
@@ -166,12 +145,16 @@ async function mergeAll(){
   download(await out.save(),'merged.pdf');
 }
 
+// Split selected pages
 async function splitSelected(){
-  const sel=[...document.querySelectorAll('.page')].filter(p=>p.querySelector('input').checked);
-  if(!sel.length) return alert('Select pages first');
+  const selected = [...document.querySelectorAll('.page')]
+    .filter(p=>p.querySelector('input').checked);
+
+  if(!selected.length) return alert("Select pages");
 
   const out = await PDFDocument.create();
-  for(const div of sel){
+
+  for(const div of selected){
     const src = pdfDocs[div.dataset.pdf];
     const idx = parseInt(div.dataset.page);
     const [cp] = await out.copyPages(src,[idx]);
@@ -182,10 +165,10 @@ async function splitSelected(){
 }
 
 function download(bytes,name){
-  const blob=new Blob([bytes],{type:'application/pdf'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download=name;
+  const blob = new Blob([bytes],{type:'application/pdf'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
   a.click();
 }
 </script>
