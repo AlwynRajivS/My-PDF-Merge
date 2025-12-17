@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Advanced PDF Tool</title>
+<title>Multi PDF Merge – Preview & Reorder</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -12,173 +12,112 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
 
 <style>
-body{
-  margin:0;
-  font-family:Inter,system-ui;
-  background:#f1f5f9;
-}
-header{
-  background:linear-gradient(135deg,#1e3a8a,#2563eb);
-  color:#fff;
-  padding:16px;
-  text-align:center;
-}
-.container{
-  max-width:1200px;
-  margin:20px auto;
-  padding:16px;
-}
-.card{
-  background:#fff;
-  border-radius:16px;
-  padding:16px;
-  box-shadow:0 10px 25px rgba(0,0,0,.1);
-}
-input[type=file]{
-  padding:10px;
-}
-button{
-  padding:10px 16px;
-  border:none;
-  border-radius:10px;
-  font-weight:600;
-  background:#2563eb;
-  color:white;
-  cursor:pointer;
-}
+body{margin:0;font-family:Inter,system-ui;background:#f1f5f9}
+header{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:white;padding:16px;text-align:center}
+.container{max-width:1200px;margin:20px auto;padding:16px}
+.card{background:white;border-radius:16px;padding:16px;box-shadow:0 10px 25px rgba(0,0,0,.1)}
+input[type=file]{padding:10px}
+button{padding:10px 16px;border:none;border-radius:10px;font-weight:600;background:#2563eb;color:white;cursor:pointer}
 button.danger{background:#dc2626}
-button.secondary{background:#16a34a}
-
-.pages{
-  display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
-  gap:14px;
-  margin-top:20px;
-}
-.page{
-  background:#f8fafc;
-  border-radius:12px;
-  padding:8px;
-  text-align:center;
-  cursor:grab;
-  position:relative;
-}
-.page canvas{
-  width:100%;
-  border-radius:8px;
-}
-.page .actions{
-  display:flex;
-  justify-content:space-between;
-  margin-top:6px;
-}
-.page input{
-  transform:scale(1.2);
-}
-@media(max-width:600px){
-  .pages{grid-template-columns:repeat(2,1fr)}
-}
+.pages{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin-top:20px}
+.page{background:#f8fafc;border-radius:12px;padding:8px;cursor:grab;position:relative}
+.page canvas{width:100%;border-radius:8px}
+.actions{display:flex;justify-content:space-between;align-items:center;margin-top:6px}
+small{color:#475569}
+@media(max-width:600px){.pages{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 
 <body>
 
 <header>
-<h2>📄 Advanced PDF Tool</h2>
-<p>Preview • Drag & Drop • Delete • Split • Reorder</p>
+<h2>📄 Multi-PDF Merge Tool</h2>
+<p>Preview • Drag & Drop • Delete • Merge</p>
 </header>
 
 <div class="container">
 <div class="card">
 
-<input type="file" id="pdfInput" accept="application/pdf">
-<button onclick="loadPDF()">Load PDF</button>
+<input type="file" id="pdfInput" multiple accept="application/pdf">
+<button onclick="loadPDFs()">Load PDFs</button>
 
 <div class="pages" id="pages"></div>
 
 <br>
-<button class="secondary" onclick="saveReordered()">💾 Save Reordered PDF</button>
-<button onclick="splitSelected()">✂️ Split Selected Pages</button>
+<button onclick="mergePDFs()">🔗 Merge & Download</button>
 
 </div>
 </div>
 
 <script>
 const { PDFDocument } = PDFLib;
-let pdfBytes, pdfDoc, pageCanvases = [];
+let pdfDocs = [];     // pdf-lib documents
+let pdfBytesList = [];
 
-async function loadPDF(){
-  const file = pdfInput.files[0];
-  pdfBytes = await file.arrayBuffer();
-  pdfDoc = await PDFDocument.load(pdfBytes);
-
-  const loadingTask = pdfjsLib.getDocument({data: pdfBytes});
-  const pdf = await loadingTask.promise;
+async function loadPDFs(){
+  const files = pdfInput.files;
+  if(!files.length) return alert("Select PDFs");
 
   pages.innerHTML = '';
-  pageCanvases = [];
+  pdfDocs = [];
+  pdfBytesList = [];
 
-  for(let i=1;i<=pdf.numPages;i++){
-    const page = await pdf.getPage(i);
-    const viewport = page.getViewport({scale:0.4});
-    const canvas = document.createElement('canvas');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
+  for(let fIndex=0; fIndex<files.length; fIndex++){
+    const bytes = await files[fIndex].arrayBuffer();
+    pdfBytesList.push(bytes);
+    pdfDocs.push(await PDFDocument.load(bytes));
 
-    const div = document.createElement('div');
-    div.className = 'page';
-    div.dataset.index = i-1;
+    const pdfjs = await pdfjsLib.getDocument({data:bytes}).promise;
 
-    div.innerHTML = `
-      <canvas></canvas>
-      <div class="actions">
-        <input type="checkbox">
-        <button class="danger" onclick="deletePage(this)">✖</button>
-      </div>
-      <small>Page ${i}</small>
-    `;
-    div.querySelector('canvas').replaceWith(canvas);
-    pages.appendChild(div);
+    for(let p=1; p<=pdfjs.numPages; p++){
+      const page = await pdfjs.getPage(p);
+      const viewport = page.getViewport({scale:0.4});
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+
+      await page.render({
+        canvasContext: canvas.getContext('2d'),
+        viewport
+      }).promise;
+
+      const div = document.createElement('div');
+      div.className = 'page';
+      div.dataset.pdf = fIndex;
+      div.dataset.page = p-1;
+
+      div.innerHTML = `
+        <canvas></canvas>
+        <div class="actions">
+          <small>PDF ${fIndex+1} • Page ${p}</small>
+          <button class="danger" onclick="this.closest('.page').remove()">✖</button>
+        </div>
+      `;
+      div.querySelector('canvas').replaceWith(canvas);
+      pages.appendChild(div);
+    }
   }
 
   new Sortable(pages,{animation:150});
 }
 
-function deletePage(btn){
-  btn.closest('.page').remove();
-}
+async function mergePDFs(){
+  if(!pages.children.length) return alert("No pages to merge");
 
-async function saveReordered(){
-  const newPdf = await PDFDocument.create();
-  const indices = [...document.querySelectorAll('.page')]
-    .map(p=>parseInt(p.dataset.index));
+  const out = await PDFDocument.create();
 
-  const copied = await newPdf.copyPages(pdfDoc, indices);
-  copied.forEach(p=>newPdf.addPage(p));
+  for(const div of pages.children){
+    const srcPdf = pdfDocs[div.dataset.pdf];
+    const pageIndex = parseInt(div.dataset.page);
+    const [copied] = await out.copyPages(srcPdf,[pageIndex]);
+    out.addPage(copied);
+  }
 
-  download(await newPdf.save(),'reordered.pdf');
-}
-
-async function splitSelected(){
-  const selected = [...document.querySelectorAll('.page')]
-    .filter(p=>p.querySelector('input').checked)
-    .map(p=>parseInt(p.dataset.index));
-
-  if(!selected.length) return alert("Select pages first");
-
-  const newPdf = await PDFDocument.create();
-  const copied = await newPdf.copyPages(pdfDoc, selected);
-  copied.forEach(p=>newPdf.addPage(p));
-
-  download(await newPdf.save(),'split.pdf');
-}
-
-function download(bytes,name){
-  const blob=new Blob([bytes],{type:'application/pdf'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download=name;
+  const bytes = await out.save();
+  const blob = new Blob([bytes],{type:'application/pdf'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'merged.pdf';
   a.click();
 }
 </script>
