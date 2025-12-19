@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>My Personal PDF Editior</title>
+<title>My Personal PDF Editor </title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -10,20 +10,18 @@
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <style>
 body{margin:0;font-family:Inter,system-ui;background:#f1f5f9}
 header{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;padding:16px;text-align:center}
 .container{max-width:1200px;margin:20px auto;padding:16px}
-.card{background:#fff;border-radius:16px;padding:16px;box-shadow:0 10px 25px rgba(0,0,0,.1)}
+.card{background:#fff;border-radius:16px;padding:16px;box-shadow:0 10px 25px rgba(0,0,0,.1);margin-bottom:20px}
 .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-input[type=file]{padding:10px}
+input[type=file],input[type=number]{padding:10px;border-radius:10px;border:1px solid #cbd5f5}
 button{padding:10px 16px;border:none;border-radius:10px;font-weight:600;background:#2563eb;color:white;cursor:pointer}
 button.secondary{background:#16a34a}
 button.danger{background:#dc2626}
-
-/* 🔴 PERSONAL ZOOM BUTTONS */
-.zoomBtn{background:#dc2626 !important;color:#fff}
 
 .pages{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin-top:20px}
 .page{background:#f8fafc;border-radius:12px;padding:8px;cursor:pointer}
@@ -31,55 +29,33 @@ button.danger{background:#dc2626}
 .actions{display:flex;justify-content:space-between;align-items:center;margin-top:6px}
 small{color:#475569}
 
+.preview{margin-top:16px;overflow:auto;max-height:420px}
+.preview table{width:100%;border-collapse:collapse;font-size:14px}
+.preview th{background:#1e3a8a;color:#fff;position:sticky;top:0}
+.preview th,.preview td{border:1px solid #e5e7eb;padding:8px;text-align:center;white-space:nowrap}
+
 @media(max-width:600px){.pages{grid-template-columns:repeat(2,1fr)}}
 
-/* FULL SCREEN MODAL */
-/* FULL SCREEN MODAL – ATTRACTIVE ZOOM VIEW */
-.modal{
-  position:fixed;
-  inset:0;
-  background:linear-gradient(180deg,#000000e6,#000000f2);
-  display:none;
-  justify-content:center;
-  align-items:center;
-  z-index:9999;
+/* ===== FULL SCREEN ZOOM MODAL ===== */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.9);display:none;justify-content:center;align-items:center;z-index:9999}
+.modal-content{background:#0f172a;padding:12px;border-radius:14px;max-width:95vw;max-height:95vh;overflow:auto}
+.modal-controls{display:flex;gap:10px;align-items:center;margin-bottom:10px}
+.zoomBtn{
+  background:#ffffff;
+  color:#000;
+  border:none;
+  border-radius:8px;
+  padding:8px 14px;
+  font-weight:700;
+  cursor:pointer;
+  box-shadow:0 2px 8px rgba(0,0,0,.35);
 }
 
-.modal-content{
-  background:#0f172a;
-  padding:14px;
-  border-radius:18px;
-  max-width:96vw;
-  max-height:96vh;
-  overflow:auto;
-  box-shadow:0 30px 80px rgba(0,0,0,.6);
-}
 
-.modal canvas{
-  display:block;
-  margin:auto;
-  border-radius:10px;
-}
-
-.modal-controls{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  justify-content:space-between;
-  margin-bottom:10px;
-}
-
-.zoom-info{
-  flex:1;
-  text-align:center;
-  color:#e5e7eb;
-  font-weight:600;
-  font-size:14px;
-}
-
+.zoom-info{color:#fff;font-weight:600}
+.modal canvas{display:block;margin:auto;border-radius:8px}
 </style>
 </head>
-
 <body>
 <header>
 <h2>🛠️ My Personal PDF Editor</h2>
@@ -87,173 +63,188 @@ small{color:#475569}
 </header>
 
 <div class="container">
+
+<!-- PDF EDITOR -->
 <div class="card">
-
-<div class="controls">
-  <input type="file" id="pdfInput" accept="application/pdf">
-  <button onclick="addPDF()">➕ Add PDF</button>
-
-  <button class="secondary" onclick="mergeAll()">🔗 Merge</button>
-  <button onclick="splitSelected()">✂️ Split</button>
+  <h3>📄 PDF Editor</h3>
+  <div class="controls">
+    <input type="file" id="pdfInput" accept="application/pdf">
+    <button onclick="addPDF()">➕ Add PDF</button>
+    <button class="secondary" onclick="mergeAll()">🔗 Merge</button>
+    <button onclick="splitSelected()">✂️ Split</button>
+  </div>
+  <div class="pages" id="pages"></div>
 </div>
 
-<div class="pages" id="pages"></div>
+<!-- PDF TO EXCEL -->
+<div class="card">
+  <h3>📊 PDF → Excel Converter</h3>
+  <div class="controls">
+    <input type="file" id="pdfExcel" accept="application/pdf">
+    <input type="number" id="colCount" min="2" placeholder="Enter number of columns">
+    <button class="secondary" onclick="previewExcel()">👁 Preview</button>
+    <button onclick="downloadExcel()">⬇ Download Excel</button>
+  </div>
+  <div class="preview" id="preview"></div>
+</div>
 
 </div>
-</div>
 
-<!-- FULL SCREEN PREVIEW -->
+<!-- FULL SCREEN MODAL -->
 <div class="modal" id="previewModal">
   <div class="modal-content" id="modalBox">
     <div class="modal-controls">
-  <button class="zoomBtn" onclick="zoomModal(0.1)">➕</button>
-  <div class="zoom-info" id="zoomInfo">Zoom: 100%</div>
-  <button class="zoomBtn" onclick="zoomModal(-0.1)">➖</button>
-  <button class="danger" onclick="closeModal()">✖</button>
-</div>
-
+      <button class="zoomBtn" onclick="zoomModal(0.1)">➕</button>
+      <span class="zoom-info" id="zoomInfo">100%</span>
+      <button class="zoomBtn" onclick="zoomModal(-0.1)">➖</button>
+      <button class="danger" onclick="closeModal()">✖</button>
+    </div>
     <canvas id="modalCanvas"></canvas>
   </div>
 </div>
 
 <script>
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const { PDFDocument } = PDFLib;
 
+/************ PDF EDITOR ************/
 let pdfDocs=[], pdfJsDocs=[];
 let zoomThumb=0.5;
+let sortable;
 let modalScale=1;
 let modalPage=null;
-let sortable;
 
-// ADD PDF ONE BY ONE
 async function addPDF(){
   const file=pdfInput.files[0];
-  if(!file) return alert("Select a PDF");
-
+  if(!file) return alert('Select a PDF');
   const bytes=await file.arrayBuffer();
   const idx=pdfDocs.length;
-
   pdfDocs.push(await PDFDocument.load(bytes));
   pdfJsDocs.push(await pdfjsLib.getDocument({data:bytes}).promise);
-
   const pdf=pdfJsDocs[idx];
   for(let p=1;p<=pdf.numPages;p++) createPage(idx,p-1);
-
   if(sortable) sortable.destroy();
   sortable=new Sortable(pages,{animation:150});
-  pdfInput.value='';
 }
 
-// CREATE THUMBNAIL PAGE
 async function createPage(pdfIndex,pageIndex){
   const div=document.createElement('div');
   div.className='page';
   div.dataset.pdf=pdfIndex;
   div.dataset.page=pageIndex;
-
-  div.innerHTML=`
-    <canvas></canvas>
-    <div class="actions">
-      <input type="checkbox">
-      <button class="danger" onclick="this.closest('.page').remove()">✖</button>
-    </div>
-    <small>PDF ${pdfIndex+1} • Page ${pageIndex+1}</small>`;
-
-  div.onclick=e=>{
-    if(e.target.tagName!=='INPUT' && e.target.tagName!=='BUTTON')
-      openModal(div);
-  };
-
+  div.innerHTML=`<canvas></canvas><div class='actions'><input type='checkbox'><button class='danger' onclick='this.closest(\".page\").remove()'>✖</button></div><small>PDF ${pdfIndex+1} • Page ${pageIndex+1}</small>`;
+  div.onclick=e=>{ if(e.target.tagName!=='INPUT'&&e.target.tagName!=='BUTTON') openModal(div); };
   pages.appendChild(div);
-  renderThumb(div);
-}
-
-// RENDER THUMB
-async function renderThumb(div){
-  const pdf=pdfJsDocs[div.dataset.pdf];
-  const page=await pdf.getPage(+div.dataset.page+1);
+  const pdf=pdfJsDocs[pdfIndex];
+  const page=await pdf.getPage(pageIndex+1);
   const vp=page.getViewport({scale:zoomThumb});
   const c=div.querySelector('canvas');
   c.width=vp.width; c.height=vp.height;
   await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
 }
 
-// FULL SCREEN PREVIEW
-async function openModal(div){
-  modalPage=div;
-  modalScale=1;
-  previewModal.style.display='flex';
-  renderModal();
-}
-
-// RENDER MODAL PAGE
+function openModal(div){ modalPage=div; modalScale=1; previewModal.style.display='flex'; renderModal(); }
 async function renderModal(){
   const pdf=pdfJsDocs[modalPage.dataset.pdf];
   const page=await pdf.getPage(+modalPage.dataset.page+1);
   const vp=page.getViewport({scale:modalScale});
-  modalCanvas.width=vp.width;
-  modalCanvas.height=vp.height;
+  modalCanvas.width=vp.width; modalCanvas.height=vp.height;
   await page.render({canvasContext:modalCanvas.getContext('2d'),viewport:vp}).promise;
 }
+function zoomModal(d){ modalScale=Math.min(5,Math.max(.3,modalScale+d)); zoomInfo.innerText=Math.round(modalScale*100)+'%'; renderModal(); }
+function closeModal(){ previewModal.style.display='none'; }
 
-// BUTTON ZOOM
-function zoomModal(delta){
-  modalScale=Math.min(5,Math.max(0.3,modalScale+delta));
-  document.getElementById('zoomInfo').innerText =
-    `Zoom: ${Math.round(modalScale*100)}%`;
-  renderModal();
-}
+modalBox.addEventListener('wheel',e=>{ e.preventDefault(); zoomModal(e.deltaY<0?0.1:-0.1); },{passive:false});
+window.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
 
-
-// MOUSE WHEEL ZOOM
-modalBox.addEventListener('wheel',e=>{
-  e.preventDefault();
-  modalScale += (e.deltaY < 0 ? 0.1 : -0.1);
-  modalScale=Math.min(5,Math.max(0.3,modalScale));
-  document.getElementById('zoomInfo').innerText =
-    `Zoom: ${Math.round(modalScale*100)}%`;
-  renderModal();
-},{passive:false});
-
-
-// CLOSE MODAL
-function closeModal(){
-  previewModal.style.display='none';
-}
-
-// MERGE
 async function mergeAll(){
-  if(!pages.children.length) return alert("No pages");
+  if(!pages.children.length) return alert('No pages');
   const out=await PDFDocument.create();
-  for(const div of pages.children){
-    const [p]=await out.copyPages(pdfDocs[div.dataset.pdf],[+div.dataset.page]);
-    out.addPage(p);
-  }
+  for(const div of pages.children){ const [p]=await out.copyPages(pdfDocs[div.dataset.pdf],[+div.dataset.page]); out.addPage(p); }
   download(await out.save(),'merged.pdf');
 }
-
-// SPLIT
 async function splitSelected(){
   const sel=[...document.querySelectorAll('.page')].filter(p=>p.querySelector('input').checked);
-  if(!sel.length) return alert("Select pages");
+  if(!sel.length) return alert('Select pages');
   const out=await PDFDocument.create();
-  for(const div of sel){
-    const [p]=await out.copyPages(pdfDocs[div.dataset.pdf],[+div.dataset.page]);
-    out.addPage(p);
-  }
+  for(const div of sel){ const [p]=await out.copyPages(pdfDocs[div.dataset.pdf],[+div.dataset.page]); out.addPage(p); }
   download(await out.save(),'split.pdf');
 }
+function download(bytes,name){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([bytes])); a.download=name; a.click(); }
 
-function download(bytes,name){
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
-  a.download=name; a.click();
+/************ PDF TO EXCEL ************/
+let extractedTable=null;
+async function previewExcel(){ extractedTable=await extractTable(); if(extractedTable) renderTable(extractedTable); }
+async function downloadExcel(){ if(!extractedTable) return alert('Preview first'); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(extractedTable),'DATA'); XLSX.writeFile(wb,'PDF_Data.xlsx'); }
+
+async function extractTable(){
+  const file = document.getElementById('pdfExcel').files[0];
+  const COLS = parseInt(document.getElementById('colCount').value);
+  if(!file || !COLS) return alert('Select PDF and column count');
+
+  const buffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument(buffer).promise;
+
+  let table = [];
+  let headerCaptured = false;
+
+  for(let p=1; p<=pdf.numPages; p++){
+    const page = await pdf.getPage(p);
+    const text = await page.getTextContent();
+
+    // group items by Y (row)
+    let rows = {};
+    text.items.forEach(it=>{
+      const y = Math.round(it.transform[5]);
+      if(!rows[y]) rows[y] = [];
+      rows[y].push({
+        text: it.str,
+        x: it.transform[4]
+      });
+    });
+
+    Object.keys(rows).sort((a,b)=>b-a).forEach(y=>{
+      const items = rows[y].sort((a,b)=>a.x-b.x);
+      const values = items.map(i=>i.text.trim()).filter(Boolean);
+
+      if(values.length < COLS) return;
+
+      const digitCount = values.join('').replace(/\\D/g,'').length;
+
+      /* ---------- HEADER ---------- */
+      if(!headerCaptured && digitCount < COLS){
+        table.push(values.slice(0, COLS));
+        headerCaptured = true;
+        return;
+      }
+
+      /* ---------- DATA ---------- */
+      if(digitCount === 0) return;
+
+      // Right-align last (COLS-2) columns
+      let row = [];
+      row.push(values[0]); // ID
+
+      const tail = values.slice(values.length-(COLS-2));
+      row.push(values.slice(1, values.length-(COLS-2)).join(' '));
+      tail.forEach(v=>row.push(v));
+
+      if(row.length === COLS){
+        table.push(row);
+      }
+    });
+  }
+
+  if(!headerCaptured){
+    table.unshift(
+      Array.from({length:COLS},(_,i)=>`Column_${i+1}`)
+    );
+  }
+
+  return table;
 }
 
-// ESC TO CLOSE
-document.addEventListener('keydown',e=>{
-  if(e.key==='Escape') closeModal();
-});
+function renderTable(t){ let h='<table>'; t.forEach((r,i)=>{ h+='<tr>'+r.map(c=>`<${i?'td':'th'}>${c}</${i?'td':'th'}>`).join('')+'</tr>'; }); h+='</table>'; preview.innerHTML=h; }
 </script>
 </body>
 </html>
